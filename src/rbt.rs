@@ -9,8 +9,8 @@ use std::collections::LinkedList;
  *      doesn't grow monotonically in memory
  *      color: a vector of boolean values to denote the color (red or black) of the node
  */
-pub struct Tree<T> {
-   graph: Vec<Node<T>> ,
+pub struct Tree<'a, T> {
+   graph: Vec<Node<'a, T>> ,
    edge_list: Vec<Vec<Option<usize>>>, // Parent, left child, right child
    empty: LinkedList<usize>, // Linked list so that we don't have to worry about allocation
     // Linked list has a is_empty function. That will be useful for insertions
@@ -18,50 +18,123 @@ pub struct Tree<T> {
     root: Option<usize>, // index with the root of the tree
 }
 // Nodes simply contain the data
-struct Node<T> {
-    data: T,
+struct Node<'a, T> {
+    data: &'a T,
 }
 
-impl<T> Tree<T>  {
+impl<'a, T: std::cmp::PartialOrd /*+ std::marker::Copy*/> Tree<'a, T>  {
     /// Function to create a new Red-Black Tree. Returns an empty tree
-    pub fn new() -> Tree<T> {
+    pub fn new() -> Tree<'static, T> {
         Tree { graph: Vec::new(), edge_list: Vec::new(), empty: LinkedList::new(), color: Vec::new(), root: None}
     }
     /// Insert does exactly what it says, it inserts data into the tree, rebalancing if necessary
-    pub fn insert(&mut self, input: T) {
+    pub fn insert (&mut self, input: &'a T){
+        let mut in_pnt: Option<usize> = None;
         if self.graph.len() == self.empty.len() { // Tree is empty, add the root
-            if !self.empty.is_empty() {
-
+            if !self.empty.is_empty() { // Empty stack has some value, reuse these indicies
+                let opt_root = self.empty.pop_back(); // Get root value off the stack. This is popped as an Option
+                let root_unwrapped = opt_root.unwrap();
+                self.root = opt_root;
+                self.edge_list.push(vec![None, None, None]);
+                self.graph[root_unwrapped] = Node {data: input};
+                self.color[root_unwrapped] = false;
             } else {
                 self.graph.push(Node { data: input});
                 self.edge_list.push(vec![None, None, None]); // The root has no parents, and no siblings. How sad :(
+                self.root = Some(0);
+                self.color.push(false);
             }
+        } else{ // The tree has nodes
+            in_pnt =  self.insert_helper(&input, self.root); // recursively insert
         }
+        // Data inserted, rebalance
     }
 
-    /// in_order traverses the tree and returns a list of the nodes in order
-    pub fn in_order(self) -> LinkedList<T>
+    // Private method to help recursively insert a node
+    fn insert_helper(&mut self, input: &'a T, index: Option<usize>) -> Option<usize> {
+        let idx = index.unwrap();
+        let mut ret: Option<usize> = None;
+        if input < &self.graph[idx].data { // Move left
+            if self.edge_list[idx][1].is_some(){ // check that it's not None
+                ret = self.insert_helper(input, self.edge_list[idx][1]);
+            } else { // insert
+                if self.empty.is_empty(){ // need to add a new element
+                    ret = Some(self.graph.len());
+                    self.graph.push(Node{data: input});
+                    self.edge_list[idx][1] = ret;
+                    self.edge_list.push(vec![index, None, None]);
+
+                } else {
+                    ret = self.empty.pop_back();
+                    self.edge_list[idx][1] = ret;
+                    match ret {
+                        Some(r) => {
+                            self.graph[r].data = input;
+                            self.edge_list[r] = vec![index, None, None];
+                        }
+                        None => {
+                            unreachable!();
+                        }
+                    }
+                }
+            }
+        }
+        if input > &self.graph[idx].data { // Move right
+            if self.edge_list[idx][2].is_some(){ // check that it's not None
+                ret = self.insert_helper(input, self.edge_list[idx][2]);
+            } else { // insert
+                if self.empty.is_empty(){ // need to add a new element
+                    ret = Some(self.graph.len());
+                    self.graph.push(Node{data: input});
+                    self.edge_list[idx][2] = ret;
+                    self.edge_list.push(vec![index, None, None]);
+                } else {
+                    ret = self.empty.pop_back();
+                    self.edge_list[idx][2] = ret;
+                    match ret {
+                        Some(r) => {
+                            self.graph[r].data = input;
+                            self.edge_list[r] = vec![index, None, None];
+                        }
+                        None => {
+                            unreachable!();
+                        }
+                    }
+                }
+            }
+        }
+        ret
+    }
+
+    /// in_order traverses the tree and returns a list of the nodes in depth first order
+    pub fn in_order(self) -> LinkedList<T> 
         where T: Copy,
     {
-        let mut stack: LinkedList<T> = LinkedList::new();
+        let mut ll: LinkedList<T> = LinkedList::new();
         if self.graph.len() == self.empty.len() { // Tree is empty
            // Do nothing 
         } else {
-            match self.root {
-                Some(r) => {
-                    let left_child = self.edge_list[r][1];
-                    let right_child = self.edge_list[r][2];
-                    stack.push_back(self.graph[r].data);
-                    self.in_order_recursive(left_child);
-                    self.in_order_recursive(right_child);
-                }
-                None => { unreachable!() }
+            ll.append(& mut self.ino_recursive(self.root));
+        }
+        ll
+    }
+    // Helper function to recursively build the linked list for in order traversal
+    fn ino_recursive(&self, index: Option<usize>) -> LinkedList<T>
+        where T: Copy,
+    {
+        let mut ll :LinkedList<T> = LinkedList::new();
+        match index {
+            Some(i) => {
+                let left: Option<usize> = self.edge_list[i][1];
+                let right: Option<usize> = self.edge_list[i][2];
+                ll.append(&mut self.ino_recursive(left));
+                ll.push_back(*self.graph[i].data);
+                ll.append(&mut self.ino_recursive(right));
+            }
+            None => { // Nothing to recurse into
+                // Do nothing
             }
         }
-        stack
-    }
-    // Helper function to build the stack
-    fn in_order_recursive(&self, index: Option<usize>) -> LinkedList<T>{
-        LinkedList::new()
+        ll
     }
 }
