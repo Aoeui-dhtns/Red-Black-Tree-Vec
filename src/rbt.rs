@@ -48,12 +48,21 @@ impl<'a, T: std::cmp::PartialOrd /*+ std::marker::Copy*/> Tree<'a, T>  {
             in_pnt =  self.insert_helper(&input, self.root); // recursively insert
         }
         // Data inserted, rebalance
+        match in_pnt {
+            Some(i) => {
+                self.insert_rebalance(i); // rebalance the tree
+            }
+            None =>{
+                // Nothing was inserted.
+            }
+        }
     }
 
     // Private method to help recursively insert a node
     fn insert_helper(&mut self, input: &'a T, index: Option<usize>) -> Option<usize> {
         let idx = index.unwrap();
         let mut ret: Option<usize> = None;
+        //TODO Add color assignment
         if input < &self.graph[idx].data { // Move left
             if self.edge_list[idx][1].is_some(){ // check that it's not None
                 ret = self.insert_helper(input, self.edge_list[idx][1]);
@@ -105,9 +114,38 @@ impl<'a, T: std::cmp::PartialOrd /*+ std::marker::Copy*/> Tree<'a, T>  {
         }
         ret
     }
+    
+        // Private helper function to rebalance the tree after an insert
+        fn insert_rebalance(&mut self, _index: usize){
+            //TODO implement function
+        }
+    
+        ///Function to search the tree for a given value. Returns true if found, false otherwise.
+        pub fn contains(&self, input: &T) -> bool{
+            self.contains_recursive(self.root, input)
+        }
+
+        fn contains_recursive(&self, index: Option<usize>, input: &T) -> bool {
+            let mut ret = false;
+            match index {
+                Some(idx) => {
+                    if self.graph[idx].data == input {
+                        ret = true;
+                    } else if self.graph[idx].data > input {
+                        ret = self.contains_recursive(self.edge_list[idx][1], input);
+                    } else {
+                        ret = self.contains_recursive(self.edge_list[idx][2], input);
+                    }
+                }
+                None => {
+                    // Do nothing
+                }
+            }
+            ret
+        }
 
     /// in_order traverses the tree and returns a list of the nodes in depth first order
-    pub fn in_order(self) -> LinkedList<T> 
+    pub fn in_order(&self) -> LinkedList<T> 
         where T: Copy,
     {
         let mut ll: LinkedList<T> = LinkedList::new();
