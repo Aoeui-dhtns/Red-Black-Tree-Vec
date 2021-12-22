@@ -1,4 +1,4 @@
-use std::collections::LinkedList;
+use std::{collections::LinkedList, mem::size_of};
 
 ///Red-Black trees are a type of self balancing binary search tree
 /*
@@ -27,15 +27,23 @@ impl<'a, T: std::cmp::PartialOrd /*+ std::marker::Copy*/> Tree<T>  {
     pub fn new() -> Tree<T> {
         Tree { graph: Vec::new(), edge_list: Vec::new(), empty: LinkedList::new(), color: Vec::new(), root: None}
     }
+
+    /// With capacity function creates a new tree with the specified vector capacity.
+    /// If the upper bound on the number of nodes you will need is known it is strongly
+    /// recommended that you use this method to avoid potential O(n) resizing of vectors
+    pub fn with_capacity(size: usize) -> Tree<T> {
+        Tree { graph: Vec::with_capacity(size), edge_list: Vec::with_capacity(size), empty: LinkedList::new(), color: Vec::with_capacity(size), root: None }
+    }
+
     /// Insert does exactly what it says, it inserts data into the tree, rebalancing if necessary
     pub fn insert (&mut self, input: T){
         let in_pnt: Option<usize>;
-        if self.graph.len() == self.empty.len() { // Tree is empty, add the root
+        if self.root.is_none() { // Tree is empty, add the root
             if !self.empty.is_empty() { // Empty stack has some value, reuse these indicies
                 let opt_root = self.empty.pop_back(); // Get root value off the stack. This is popped as an Option
                 let root_unwrapped = opt_root.unwrap();
                 self.root = opt_root;
-                self.edge_list.push(vec![None, None, None]);
+                self.edge_list[root_unwrapped] = vec![None, None, None];
                 self.graph[root_unwrapped] = Node {data: Box::new(input)};
                 self.color[root_unwrapped] = false;
             } else {
@@ -288,14 +296,15 @@ impl<'a, T: std::cmp::PartialOrd /*+ std::marker::Copy*/> Tree<T>  {
                 }
                 match self.edge_list[child][0] { // place child as child of grandfather
                     Some(g) => {
-                        if self.edge_list[g][1] == idx {
+                        //if self.edge_list[g][1] == idx {
                             self.edge_list[g][1] = Some(child);
-                        } else {
-                            self.edge_list[g][2] = Some(child);
-                        }
+                        //} else {
+                            //self.edge_list[g][2] = Some(child);
+                        //}
                     }
                     None => {
-                        self.root = Some(child);
+                        unreachable!();
+                        //self.root = Some(child);
                     }
                 }
                 self.edge_list[child][1] = idx; // index becomes left child
@@ -310,11 +319,11 @@ impl<'a, T: std::cmp::PartialOrd /*+ std::marker::Copy*/> Tree<T>  {
     // Right rotation around index
     fn right_left_rotation(&mut self, index: usize) {
         let idx = Some(index);
-        match self.edge_list[index][2] {
+        match self.edge_list[index][1] {
             Some(child) => {
                 self.edge_list[child][0] = self.edge_list[index][0]; // set child parent to grandfather
                 self.edge_list[index][0] = self.edge_list[index][1]; // set parent to right child
-                self.edge_list[index][1] = self.edge_list[child][2]; // left child must become right child of index
+                self.edge_list[index][1] = self.edge_list[child][2]; // right child must become left child of index
                 match self.edge_list[child][2] {
                     Some(rc) => {
                         self.edge_list[rc][0] = idx;
@@ -325,14 +334,14 @@ impl<'a, T: std::cmp::PartialOrd /*+ std::marker::Copy*/> Tree<T>  {
                 }
                 match self.edge_list[child][0] { // Place child as child of grandfather
                     Some(g) => {
-                        if self.edge_list[g][1] == idx {
-                            self.edge_list[g][1] = Some(child);
-                        } else {
+                        //if self.edge_list[g][1] == idx {
+                        //    self.edge_list[g][1] = Some(child);
+                        //} else {
                             self.edge_list[g][2] = Some(child);
-                        }
+                        //}
                     }
                     None => {
-                        self.root = Some(child);
+                        unreachable!();
                     }
                 }
                 self.edge_list[child][2] = idx; // index becomes left child
@@ -343,21 +352,54 @@ impl<'a, T: std::cmp::PartialOrd /*+ std::marker::Copy*/> Tree<T>  {
             }
         }
     }
-        ///Function to search the tree for a given value. Returns true if found, false otherwise.
-    pub fn contains(&self, input: T) -> bool{
-        self.contains_recursive(self.root, &input)
+
+    /// Function to remove a given element from the tree. If the element is not in the tree,
+    /// nothing is done.
+    pub fn remove(&mut self, elem: T) {
+        let index = self.contains_recursive(self.root, &elem); // find the index of the element to be removed
+        match index {
+            Some(idx) => {
+                let lcn = self.edge_list[idx][1].is_none(); // left child None
+                let rcn = self.edge_list[idx][2].is_none(); // right child None
+                if lcn && rcn { // both children are None, element to be deleted is leaf
+                    match self.edge_list[idx][0] {
+                        Some(_p) => {
+                            
+                        }
+                        None => { // element to be removed is the root and the only element in the tree
+                            self.root = None;
+                            self.empty.push_back(idx);
+                        }
+                    }
+                } else if lcn { // Left child is None, right child exists
+                    
+                } else if rcn { // right child is None, left child exists
+                    
+                } else { // Both children exist
+                    
+                }
+            }
+            None => {
+                // Element is not in tree, no need to remove
+            }
+        }
     }
 
-    fn contains_recursive(&self, index: Option<usize>, input: &T) -> bool {
-        let mut ret = false;
+    ///Function to search the tree for a given value. Returns true if found, false otherwise.
+    pub fn contains(&self, input: T) -> bool{
+        self.contains_recursive(self.root, &input).is_some() // If the item is found, an index will be returned
+    }
+
+    fn contains_recursive(&self, index: Option<usize>, input: &T) -> Option<usize> {
+        let mut ret: Option<usize> = None;
         match index {
             Some(idx) => {
                 let d = self.graph[idx].data.as_ref();
-                if d == input {
-                    ret = true;
-                } else if d > input {
+                if d == input { // Item found, return index
+                    ret = index;
+                } else if d > input { // check left
                     ret = self.contains_recursive(self.edge_list[idx][1], input);
-                } else {
+                } else { // check right
                     ret = self.contains_recursive(self.edge_list[idx][2], input);
                 }
             }
@@ -371,7 +413,7 @@ impl<'a, T: std::cmp::PartialOrd /*+ std::marker::Copy*/> Tree<T>  {
     /// in_order traverses the tree and returns a list of the nodes in depth first order
     pub fn in_order(&self) -> LinkedList<&T> {
         let mut ll: LinkedList<&T> = LinkedList::new();
-        if self.graph.len() == self.empty.len() { // Tree is empty
+        if self.root.is_none() { // Tree is empty
            // Do nothing 
         } else {
             ll.append(& mut self.ino_recursive(self.root));
@@ -388,6 +430,62 @@ impl<'a, T: std::cmp::PartialOrd /*+ std::marker::Copy*/> Tree<T>  {
                 ll.append(&mut self.ino_recursive(left));
                 ll.push_back(self.graph[i].data.as_ref());
                 ll.append(&mut self.ino_recursive(right));
+            }
+            None => { // Nothing to recurse into
+                // Do nothing
+            }
+        }
+        ll
+    }
+
+    /// Pre order traversal of the tree
+    pub fn pre_order(&self) -> LinkedList<&T> {
+        let mut ll: LinkedList<&T> = LinkedList::new();
+        if self.root.is_none() { // Tree is empty
+           // Do nothing 
+        } else {
+            ll.append(& mut self.pre_recursive(self.root));
+        }
+        ll
+    }
+
+    fn pre_recursive(&self, index: Option<usize>) -> LinkedList<&T> {
+        let mut ll :LinkedList<&T> = LinkedList::new();
+        match index {
+            Some(i) => {
+                let left: Option<usize> = self.edge_list[i][1];
+                let right: Option<usize> = self.edge_list[i][2];
+                ll.push_back(self.graph[i].data.as_ref());
+                ll.append(&mut self.ino_recursive(left));
+                ll.append(&mut self.ino_recursive(right));
+            }
+            None => { // Nothing to recurse into
+                // Do nothing
+            }
+        }
+        ll
+    }
+    
+    /// Post order traversal of the tree
+    pub fn post_order(&self) -> LinkedList<&T> {
+        let mut ll: LinkedList<&T> = LinkedList::new();
+        if self.root.is_none() { // Tree is empty
+           // Do nothing 
+        } else {
+            ll.append(& mut self.post_recursive(self.root));
+        }
+        ll
+    }
+
+    fn post_recursive(&self, index: Option<usize>) -> LinkedList<&T> {
+        let mut ll :LinkedList<&T> = LinkedList::new();
+        match index {
+            Some(i) => {
+                let left: Option<usize> = self.edge_list[i][1];
+                let right: Option<usize> = self.edge_list[i][2];
+                ll.append(&mut self.ino_recursive(left));
+                ll.append(&mut self.ino_recursive(right));
+                ll.push_back(self.graph[i].data.as_ref());
             }
             None => { // Nothing to recurse into
                 // Do nothing
