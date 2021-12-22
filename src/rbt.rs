@@ -1,4 +1,4 @@
-use std::{collections::LinkedList, mem::size_of};
+use std::collections::LinkedList;
 
 ///Red-Black trees are a type of self balancing binary search tree
 /*
