@@ -138,7 +138,6 @@ impl<T: std::cmp::PartialOrd> Tree<T>  {
                             self.edge_list[r] = vec![index, None, None];
                             self.color[r] = true;
                             is_empty = false;
-                            println!("{} {}", self.edge_list[idx][0].unwrap(), self.edge_list[idx][2].unwrap());
                         }
                         None => {
                             unreachable!();
