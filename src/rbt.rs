@@ -397,15 +397,16 @@ impl<T: std::cmp::PartialOrd> Tree<T>  {
             Some(idx) => {
                 let lcn = self.edge_list[idx][1].is_none(); // left child None
                 let rcn = self.edge_list[idx][2].is_none(); // right child None
-                let mut is_left_child: bool = false;
-                let mut is_right_child: bool = false;
                 if lcn && rcn { // both children are None, element to be deleted is leaf
                     match self.edge_list[idx][0] {
                         Some(p) => {
-                            if self.edge_list[p][1] == index { // Determine if index is left or right child of parent
-                                self.edge_list[p][1] = None; // Erase the connection
+                            if  self.edge_list[p][1] == index {
+                                self.edge_list[p][1] = None;
                             } else {
                                 self.edge_list[p][2] = None;
+                            }
+                            if !self.color[idx] {
+                                self.remove_helper(index);
                             }
                         }
                         None => { // element to be removed is the root and the only element in the tree
@@ -413,22 +414,17 @@ impl<T: std::cmp::PartialOrd> Tree<T>  {
                         }
                     }
                     self.empty.push_back(idx); // Mark index as free in the stack
-                    if self.color[idx] { // 
-                    }
                 } else if lcn  && !rcn { // Left child is None, right child exists
                     let rc_idx = self.edge_list[idx][2].unwrap();
                     match self.edge_list[idx][0] {
                         Some(p) => {
-                            if self.edge_list[p][1] == index{ // swap index for index's right child in parent node
+                            if  self.edge_list[p][1] == index {
                                 self.edge_list[p][1] = self.edge_list[idx][2];
-                                if !self.color[idx] && !self.color[rc_idx]{
-                                    self.remove_helper(self.edge_list[p][2], false);
-                                }
                             } else {
                                 self.edge_list[p][2] = self.edge_list[idx][2];
-                                if !self.color[idx] && !self.color[rc_idx]{
-                                    self.remove_helper(self.edge_list[p][1], true);
-                                }
+                            }
+                            if !self.color[idx] && !self.color[rc_idx]{
+                                self.remove_helper(index);
                             }
                         }
                         None => {
@@ -446,16 +442,13 @@ impl<T: std::cmp::PartialOrd> Tree<T>  {
                     let lc_idx = self.edge_list[idx][1].unwrap();
                     match self.edge_list[idx][0] {
                         Some(p) => {
-                            if self.edge_list[p][1] == index{ // swap index for index's left child in parent node
-                                self.edge_list[p][1] = self.edge_list[lc_idx][1];
-                                if !self.color[idx] && !self.color[lc_idx]{
-                                    self.remove_helper(self.edge_list[p][2], false);
-                                }
+                            if  self.edge_list[p][1] == index {
+                                self.edge_list[p][1] = self.edge_list[idx][1];
                             } else {
-                                self.edge_list[p][2] = self.edge_list[lc_idx][1];
-                                if !self.color[idx] && !self.color[lc_idx]{
-                                    self.remove_helper(self.edge_list[p][1], true);
-                                }
+                                self.edge_list[p][2] = self.edge_list[idx][1];
+                            }
+                            if !self.color[idx] && !self.color[lc_idx]{
+                                self.remove_helper(index);
                             }
                         }
                         None => {
@@ -532,12 +525,57 @@ impl<T: std::cmp::PartialOrd> Tree<T>  {
         }
     }
 
-    fn remove_helper(&mut self, index: Option<usize>, left: bool) {
+    //When we delete a black node with two black children (remember, null is black!). If the
+    // sibling is black with at least one red child we must rotate. If the sibling is red, both of
+    // it's childen must be black (per the properties of red black trees) and it must be rotated
+    // based on whether the sibling is the left or right child.
+    // When we remove a black node that has two black childen, whose sibling also has two black
+    // childern we must recolor the tree.
+    // There are two cases. The simple case is that the parent is red. In this case the parent
+    // becomes black and the sibling becomes red. The more complex case is when the parent is also
+    // black. In this case the parent remains black, the sibling becomes red, and the function is
+    // recalled on the parent. If we hit the root, the root remains black, the sibling becomes red,
+    // and then we are done.
+    // index is the index of the parent node, is_left lets us know if the sibling is the left node.
+    fn remove_helper(&mut self, index: Option<usize>) {
+        let sibling_is_left: bool;
+        let sibling_index: Option<usize>;
+        let parent_color: bool;
+        let p_idx: usize;
         match index {
             Some(idx) => {
+                match self.edge_list[idx][0] {
+                    Some(p) => {
+                        parent_color = self.color[p];
+                        p_idx = p;
+                        if self.edge_list[p][1] == index {
+                            if self.edge_list[p][2].is_none(){ // No sibling, move up the tree
+                                self.remove_helper(self.edge_list[idx][0]);
+                            }
+                            sibling_is_left = false;
+                            sibling_index = self.edge_list[p][2];
+                        } else {
+                            if self.edge_list[p][1].is_none(){ // No sibling, move up the tree
+                                self.remove_helper(self.edge_list[idx][0]);
+                            }
+                            sibling_is_left = true;
+                            sibling_index = self.edge_list[p][1];
+                        }
+                    }
+                    None => { // We are at the root
+                        return;
+                    }
+                }
+            }
+            None => {
+                unreachable!();
+            }
+        }
+        match sibling_index {
+            Some(s_idx) => {
                 let left_color: bool; // stores color for left child
                 let right_color: bool; // stores color for right child
-                match self.edge_list[idx][1] {
+                match self.edge_list[s_idx][1] {
                     Some(left_child) => {
                         left_color = self.color[left_child];
                     }
@@ -545,7 +583,7 @@ impl<T: std::cmp::PartialOrd> Tree<T>  {
                         left_color = false;
                     }
                 }
-                match self.edge_list[idx][2] {
+                match self.edge_list[s_idx][2] {
                     Some(right_child) => {
                         right_color = self.color[right_child];
                     }
@@ -553,37 +591,51 @@ impl<T: std::cmp::PartialOrd> Tree<T>  {
                         right_color = false;
                     }
                 }
-                if !self.color[idx] { // If black
-                    if left { // node is left sibling
+                if !self.color[s_idx] { // If black
+                    if sibling_is_left{ // node is left sibling
                         if left_color { // left child is red
-                            self.left_left_rotation(idx);
+                            self.left_left_rotation(s_idx);
                         } else if right_color {
-                            self.left_right_rotation(idx);
+                            self.left_right_rotation(s_idx);
                         } else { // both children are black
-
+                            if parent_color { // parent is red
+                                self.color[s_idx] = true; // sibling becomes red
+                                self.color[p_idx] = false; // parent becomes black
+                            } else {
+                                self.color[s_idx] = true; // sibling becomes red
+                                self.remove_helper(self.edge_list[s_idx][0]); // recall on parent
+                            }
                         }
                     } else { // must be right sibling
                         if right_color { // left child is red
-                            self.right_right_rotation(idx);
+                            self.right_right_rotation(s_idx);
                         } else if left_color {
-                            self.right_left_rotation(idx);
+                            self.right_left_rotation(s_idx);
                         } else { // both children are black
+                            if parent_color { // parent is red
+                                self.color[s_idx] = true; // sibling becomes red
+                                self.color[p_idx] = false; // parent becomes black
+                            } else {
+                                self.color[s_idx] = true; // sibling becomes red
+                                self.remove_helper(self.edge_list[s_idx][0]); // recall on parent
+                            }
                         }
-                        
                     }
                 } else { // Is red
-                    if left {
-                        self.left_left_rotation(idx);
+                    if sibling_is_left {
+                        self.left_left_rotation(s_idx);
                     } else {
-                        self.right_right_rotation(idx);
+                        self.right_right_rotation(s_idx);
                     }
                 }
             }
-            None => { // Sibling is black and both children are black
-
+            None => { // should have already moved up the tree if sibling is None
+                unreachable!();
             }
         }
     }
+
+
     // Finds the in order successor.
     fn get_in_order_successor(&self, index: usize) -> usize {
         let ret;
